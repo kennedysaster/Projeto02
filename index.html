@@ -745,11 +745,11 @@ function renderConfigCell(p){
   const raw = (p.config||'').trim();
   const current = p.configValue || null;
 
-  // Detecta opções separadas por / (ex: "Não / Sim", "IPTU / Todos")
+  // Detecta opcoes separadas por /
   if(raw.includes('/')){
-    const opts = raw.split('/').map(s=>s.trim()).filter(Boolean);
+    const opts = raw.split('/').map(function(s){return s.trim();}).filter(Boolean);
     if(opts.length >= 2 && opts.length <= 5){
-      const btns = opts.map(opt=>{
+      const btns = opts.map(function(opt){
         const isActive = current === opt;
         let cls = 'config-opt';
         if(isActive){
@@ -758,34 +758,36 @@ function renderConfigCell(p){
           else if(lc==='não' || lc==='nao') cls += ' active no';
           else cls += ' active other';
         }
-        return '<span class="'+cls+'" onclick="toggleConfigOpt(''+p.id+'',''+opt+'')">'+opt+'</span>';
+        // Use data attributes to avoid quote escaping issues
+        return '<span class="'+cls+'" data-pid="'+p.id+'" data-opt="'+opt.replace(/"/g,'&quot;')+'" onclick="toggleConfigOpt(this)">'+opt+'</span>';
       }).join('');
       return '<div class="config-toggle">'+btns+'</div>';
     }
   }
 
-  // Campo livre (config = "—" ou vazio)
-  if(!raw || raw==='—'){
-    const val = current || '';
-    return '<input class="config-text-edit" value="'+val.replace(/"/g,'&quot;')+'" placeholder="—" '+
-           'onchange="setConfigFree(''+p.id+'',this.value)" style="width:90px">';
+  // Campo livre
+  if(!raw || raw==='\u2014'){
+    const val = (current || '').replace(/"/g,'&quot;');
+    return '<input class="config-text-edit" value="'+val+'" placeholder="\u2014" data-pid="'+p.id+'" onchange="setConfigFree(this)" style="width:90px">';
   }
 
-  // Texto simples — mostra badge estático
   return '<span class="config-val">'+esc(raw)+'</span>';
 }
 
-function toggleConfigOpt(pid, val){
+
+function toggleConfigOpt(el){
+  const pid = el.getAttribute('data-pid');
+  const val = el.getAttribute('data-opt');
   const m=activeModule(); if(!m) return;
   const p=m.params.find(x=>x.id===pid); if(!p) return;
   p.configValue = (p.configValue===val) ? null : val;
-  // Re-render somente a célula sem rebuildar a tabela toda
   renderParams();
 }
-function setConfigFree(pid, val){
+function setConfigFree(el){
+  const pid = el.getAttribute('data-pid');
   const m=activeModule(); if(!m) return;
   const p=m.params.find(x=>x.id===pid); if(!p) return;
-  p.configValue = val;
+  p.configValue = el.value;
 }
 
 // ══════════════════════════════════════════════════════════════════
