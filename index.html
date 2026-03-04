@@ -253,7 +253,35 @@ tbody tr:hover .row-actions{opacity:1;}
 .theme-orange{--mc:#f59e0b;--mcbg:rgba(245,158,11,.12);}
 .theme-pink{--mc:#ec4899;--mcbg:rgba(236,72,153,.12);}
 
-@media(max-width:900px){
+
+  /* ── CONFIG TOGGLE ── */
+  .config-toggle{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;font-family:'DM Mono',monospace;font-size:11px;}
+  .config-opt{padding:3px 9px;cursor:pointer;color:var(--muted);transition:all .15s;white-space:nowrap;user-select:none;}
+  .config-opt:hover{color:var(--text);}
+  .config-opt.active{background:var(--accent);color:#fff;}
+  .config-opt.active.yes{background:var(--ok);}
+  .config-opt.active.no{background:var(--danger);}
+  .config-opt.active.other{background:var(--accent);}
+  .config-text-edit{font-family:'DM Mono',monospace;font-size:11px;background:var(--surface2);border:1px solid var(--border);color:var(--accent2);padding:2px 8px;border-radius:4px;outline:none;min-width:80px;transition:border-color .15s;}
+  .config-text-edit:focus{border-color:var(--accent);}
+  .import-panel{background:var(--surface);border:1px solid var(--ok);border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .import-panel.hidden{display:none!important;}
+  .import-panel-icon{font-size:24px;flex-shrink:0;}
+  .import-panel-info{flex:1;min-width:180px;}
+  .import-panel-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
+  .import-panel-meta{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+  .import-panel-stats{display:flex;gap:10px;flex-wrap:wrap;}
+  .import-stat{display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 14px;}
+  .import-stat .isv{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;line-height:1;}
+  .import-stat .isl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .import-stat.is-done .isv{color:var(--ok);}
+  .import-stat.is-issue .isv{color:var(--danger);}
+  .import-stat.is-pend .isv{color:var(--warn);}
+  .import-stat.is-total .isv{color:var(--text);}
+  .import-panel-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px 8px;transition:color .15s;}
+  .import-panel-close:hover{color:var(--text);}
+
+  @media(max-width:900px){
   .sidebar{transform:translateX(-260px);transition:transform .25s;}
   .sidebar.open{transform:translateX(0);}
   .main{margin-left:0;}
@@ -303,6 +331,18 @@ tbody tr:hover .row-actions{opacity:1;}
 
 <!-- ══════════ MAIN ══════════ -->
 <main class="main" id="mainContent">
+
+  <!-- ══ LAST IMPORT PANEL ══ -->
+  <div id="importPanel" class="import-panel hidden">
+    <div class="import-panel-icon">📥</div>
+    <div class="import-panel-info">
+      <div class="import-panel-title" id="importPanelTitle">Último backup importado</div>
+      <div class="import-panel-meta" id="importPanelMeta">—</div>
+    </div>
+    <div class="import-panel-stats" id="importPanelStats"></div>
+    <button class="import-panel-close" onclick="document.getElementById('importPanel').classList.add('hidden')" title="Fechar">✕</button>
+  </div>
+
   <div id="noModuleView" class="no-module">
     <div class="nm-icon">📋</div>
     <div class="nm-title">Nenhum módulo selecionado</div>
@@ -697,6 +737,57 @@ function renderTopbar(){
   document.getElementById('topbarDates').innerHTML = dates.join('');
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// CONFIG CELL — toggle Sim/Não ou texto editável
+// ══════════════════════════════════════════════════════════════════
+function renderConfigCell(p){
+  const raw = (p.config||'').trim();
+  const current = p.configValue || null;
+
+  // Detecta opções separadas por / (ex: "Não / Sim", "IPTU / Todos")
+  if(raw.includes('/')){
+    const opts = raw.split('/').map(s=>s.trim()).filter(Boolean);
+    if(opts.length >= 2 && opts.length <= 5){
+      const btns = opts.map(opt=>{
+        const isActive = current === opt;
+        let cls = 'config-opt';
+        if(isActive){
+          const lc = opt.toLowerCase();
+          if(lc==='sim') cls += ' active yes';
+          else if(lc==='não' || lc==='nao') cls += ' active no';
+          else cls += ' active other';
+        }
+        return '<span class="'+cls+'" onclick="toggleConfigOpt(''+p.id+'',''+opt+'')">'+opt+'</span>';
+      }).join('');
+      return '<div class="config-toggle">'+btns+'</div>';
+    }
+  }
+
+  // Campo livre (config = "—" ou vazio)
+  if(!raw || raw==='—'){
+    const val = current || '';
+    return '<input class="config-text-edit" value="'+val.replace(/"/g,'&quot;')+'" placeholder="—" '+
+           'onchange="setConfigFree(''+p.id+'',this.value)" style="width:90px">';
+  }
+
+  // Texto simples — mostra badge estático
+  return '<span class="config-val">'+esc(raw)+'</span>';
+}
+
+function toggleConfigOpt(pid, val){
+  const m=activeModule(); if(!m) return;
+  const p=m.params.find(x=>x.id===pid); if(!p) return;
+  p.configValue = (p.configValue===val) ? null : val;
+  // Re-render somente a célula sem rebuildar a tabela toda
+  renderParams();
+}
+function setConfigFree(pid, val){
+  const m=activeModule(); if(!m) return;
+  const p=m.params.find(x=>x.id===pid); if(!p) return;
+  p.configValue = val;
+}
+
 // ══════════════════════════════════════════════════════════════════
 // PARAMS TABLE
 // ══════════════════════════════════════════════════════════════════
@@ -734,7 +825,7 @@ function renderParams(){
     rows+=`<tr>
       <td class="num">${i+1}</td>
       <td class="param-name">${esc(p.name)}${p.desc?`<small>${esc(p.desc)}</small>`:`<small>${esc(p.group||'')}</small>`}</td>
-      <td><span class="config-val">${esc(p.config||'—')}</span></td>
+      <td style="min-width:120px">${renderConfigCell(p)}</td>
       <td class="status-col">
         <span class="status-badge status-${s.status}" onclick="openParamModal('${p.id}')">${slabel(s.status)}</span>
       </td>
@@ -1027,6 +1118,41 @@ function renderTimeline(m){
   }).join('');
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// IMPORT PANEL
+// ══════════════════════════════════════════════════════════════════
+function updateImportPanel(data, filename){
+  const panel = document.getElementById('importPanel');
+  const title = document.getElementById('importPanelTitle');
+  const meta  = document.getElementById('importPanelMeta');
+  const stats = document.getElementById('importPanelStats');
+
+  // Aggregate stats across all modules
+  let total=0, done=0, issue=0, pend=0;
+  (data.modules||[]).forEach(m=>{
+    (m.params||[]).forEach(p=>{
+      const s=(m.state||{})[p.id]||{};
+      total++;
+      if(s.status==='done') done++;
+      else if(s.status==='issue') issue++;
+      else pend++;
+    });
+  });
+
+  const modCount = (data.modules||[]).length;
+  title.textContent = '📥 Backup importado: ' + (filename||'arquivo.json');
+  meta.textContent  = (data.exportedAt||'Data desconhecida') + '  ·  ' + modCount + ' módulo(s)';
+
+  stats.innerHTML = `
+    <div class="import-stat is-total"><div class="isv">${total}</div><div class="isl">Total</div></div>
+    <div class="import-stat is-done"><div class="isv">${done}</div><div class="isl">Concluídos</div></div>
+    <div class="import-stat is-issue"><div class="isv">${issue}</div><div class="isl">Problemas</div></div>
+    <div class="import-stat is-pend"><div class="isv">${pend}</div><div class="isl">Pendentes</div></div>
+  `;
+  panel.classList.remove('hidden');
+}
+
 // ══════════════════════════════════════════════════════════════════
 // JSON EXPORT / IMPORT
 // ══════════════════════════════════════════════════════════════════
@@ -1077,17 +1203,17 @@ function readJSON(file){
 
       } else if(data.version===1 && data.state){
         // V1: era só AR040; as chaves do state eram numéricas ("1","2"…)
-        // Os params do AR040 têm id "p1","p2"… — mapear corretamente
         const ar=modules.find(m=>m.id==='mod_ar040');
         if(ar){
           Object.keys(data.state).forEach(rawKey=>{
-            // tenta chave direta (ex: "p1") e chave numérica (ex: "1" → "p1")
             const pid = ar.state[rawKey] !== undefined ? rawKey
                       : ar.state['p'+rawKey] !== undefined ? 'p'+rawKey
                       : null;
             if(pid) Object.assign(ar.state[pid], data.state[rawKey]);
           });
         }
+        // Para o painel, monta objeto compatível
+        data.modules = modules;
       } else {
         throw new Error('Formato não reconhecido');
       }
@@ -1111,6 +1237,7 @@ function readJSON(file){
         document.getElementById('moduleView').style.display='none';
       }
 
+      updateImportPanel(data, file.name);
       showToast('✅ Importado: '+(data.exportedAt||file.name),'ok');
 
     } catch(err){
