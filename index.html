@@ -667,10 +667,20 @@ function renderSidebar(){
 // ══════════════════════════════════════════════════════════════════
 function selectModule(id){
   activeModuleId = id;
-  currentFilter = 'all';
-  searchQuery = '';
-  document.getElementById('noModuleView').style.display='none';
-  document.getElementById('moduleView').style.display='block';
+  currentFilter  = 'all';
+  searchQuery    = '';
+
+  // Mostrar view ANTES de renderizar (elementos precisam estar no DOM)
+  document.getElementById('noModuleView').style.display = 'none';
+  document.getElementById('moduleView').style.display   = 'block';
+
+  // Garantir aba Parametros ativa
+  ['params','reports','guide'].forEach(function(t){
+    var el = document.getElementById('tab-'+t);
+    if(el) el.style.display = t==='params' ? 'block' : 'none';
+  });
+  document.querySelectorAll('.nav-tab').forEach(function(b,i){ b.classList.toggle('active', i===0); });
+
   renderSidebar();
   renderTopbar();
   renderParams();
@@ -1052,24 +1062,63 @@ function readJSON(file){
   reader.onload=function(e){
     try{
       const data=JSON.parse(e.target.result);
-      // suporta v1 (AR040 apenas) e v2 (multi-módulo)
+
       if(data.version===2 && Array.isArray(data.modules)){
-        modules=data.modules;
+        // V2: importação completa — substitui tudo
+        modules = data.modules;
+
+        // garantir que cada módulo tem state para todos os params
+        modules.forEach(m=>{
+          if(!m.state) m.state={};
+          (m.params||[]).forEach(p=>{
+            if(!m.state[p.id]) m.state[p.id]={status:'pending',date:'',validation:'',cause:'',notes:''};
+          });
+        });
+
       } else if(data.version===1 && data.state){
-        // migrar v1 para v2
+        // V1: era só AR040; as chaves do state eram numéricas ("1","2"…)
+        // Os params do AR040 têm id "p1","p2"… — mapear corretamente
         const ar=modules.find(m=>m.id==='mod_ar040');
-        if(ar) Object.keys(data.state).forEach(id=>{ if(ar.state[id]) Object.assign(ar.state[id],data.state[id]); });
-      } else { throw new Error('Formato inválido'); }
+        if(ar){
+          Object.keys(data.state).forEach(rawKey=>{
+            // tenta chave direta (ex: "p1") e chave numérica (ex: "1" → "p1")
+            const pid = ar.state[rawKey] !== undefined ? rawKey
+                      : ar.state['p'+rawKey] !== undefined ? 'p'+rawKey
+                      : null;
+            if(pid) Object.assign(ar.state[pid], data.state[rawKey]);
+          });
+        }
+      } else {
+        throw new Error('Formato não reconhecido');
+      }
+
+      // Fechar modal ANTES de atualizar a view
       closeImportModal();
-      activeModuleId=null;
-      document.getElementById('noModuleView').style.display='flex';
-      document.getElementById('moduleView').style.display='none';
+
+      // Reset de estado de navegação
+      activeModuleId = null;
+      currentFilter  = 'all';
+      searchQuery    = '';
+
+      // Atualizar sidebar
       renderSidebar();
-      // select first module
-      if(modules.length) selectModule(modules[0].id);
-      showToast(`✅ Importado: ${data.exportedAt||file.name}`,'ok');
-    } catch(err){ showToast('Erro: arquivo JSON inválido','err'); }
+
+      // Selecionar primeiro módulo (mostra a view corretamente)
+      if(modules.length){
+        selectModule(modules[0].id);
+      } else {
+        document.getElementById('noModuleView').style.display='flex';
+        document.getElementById('moduleView').style.display='none';
+      }
+
+      showToast('✅ Importado: '+(data.exportedAt||file.name),'ok');
+
+    } catch(err){
+      console.error('Erro importação JSON:', err);
+      showToast('Erro ao importar: verifique o arquivo JSON','err');
+    }
   };
+  reader.onerror = function(){ showToast('Erro ao ler o arquivo','err'); };
   reader.readAsText(file);
 }
 
