@@ -281,6 +281,38 @@ tbody tr:hover .row-actions{opacity:1;}
   .import-panel-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px 8px;transition:color .15s;}
   .import-panel-close:hover{color:var(--text);}
 
+
+  /* ── GOOGLE DRIVE ── */
+  .drive-status{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:6px 8px;
+    border-radius:8px;font-size:11px;font-family:'DM Mono',monospace;}
+  .drive-status.connected{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:var(--ok);}
+  .drive-status.disconnected{background:rgba(100,116,139,.08);border:1px solid var(--border);color:var(--muted);}
+  .drive-status.loading{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);color:var(--accent);}
+  .drive-status .ds-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .drive-status.connected .ds-dot{background:var(--ok);}
+  .drive-status.disconnected .ds-dot{background:var(--muted);}
+  .drive-status.loading .ds-dot{background:var(--accent);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .drive-user{font-size:10px;color:var(--muted);padding:0 12px 6px;display:flex;align-items:center;gap:6px;overflow:hidden;}
+  .drive-user img{width:18px;height:18px;border-radius:50%;flex-shrink:0;}
+  .drive-user span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sidebar-footer-btn.drive-save{border-color:#4285f4;color:#4285f4;}
+  .sidebar-footer-btn.drive-save:hover{background:rgba(66,133,244,.12);}
+  .sidebar-footer-btn.drive-load{border-color:#34a853;color:#34a853;}
+  .sidebar-footer-btn.drive-load:hover{background:rgba(52,168,83,.12);}
+  .sidebar-footer-btn.drive-connect{border-color:#fbbc04;color:#fbbc04;}
+  .sidebar-footer-btn.drive-connect:hover{background:rgba(251,188,4,.12);}
+  .autoload-banner{background:linear-gradient(135deg,rgba(52,168,83,.12),rgba(66,133,244,.12));
+    border:1px solid rgba(66,133,244,.25);border-radius:10px;padding:12px 16px;
+    margin-bottom:16px;display:flex;align-items:center;gap:12px;font-size:12px;}
+  .autoload-banner.hidden{display:none;}
+  .autoload-banner .ab-icon{font-size:20px;flex-shrink:0;}
+  .autoload-banner .ab-text{flex:1;color:var(--label);}
+  .autoload-banner .ab-text strong{color:var(--text);}
+  .autoload-banner .ab-spinner{width:16px;height:16px;border:2px solid var(--border);
+    border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
   @media(max-width:900px){
   .sidebar{transform:translateX(-260px);transition:transform .25s;}
   .sidebar.open{transform:translateX(0);}
@@ -293,6 +325,8 @@ tbody tr:hover .row-actions{opacity:1;}
   body{background:#fff;color:#111;}
 }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 </head>
 <body>
 <div class="toast" id="toast"></div>
@@ -313,14 +347,41 @@ tbody tr:hover .row-actions{opacity:1;}
     Novo Módulo
   </button>
 
+  <!-- DRIVE STATUS -->
+  <div id="driveStatus" class="drive-status disconnected">
+    <span class="ds-dot"></span>
+    <span id="driveStatusText">Google Drive desconectado</span>
+  </div>
+  <div id="driveUser" class="drive-user" style="display:none">
+    <img id="driveUserImg" src="" alt="">
+    <span id="driveUserName"></span>
+  </div>
+
   <div class="sidebar-footer">
+    <!-- Drive buttons (shown when connected) -->
+    <button id="btnDriveSave" class="sidebar-footer-btn drive-save" onclick="driveSave()" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Salvar no Drive
+    </button>
+    <button id="btnDriveLoad" class="sidebar-footer-btn drive-load" onclick="driveLoad()" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Carregar do Drive
+    </button>
+    <button id="btnDriveConnect" class="sidebar-footer-btn drive-connect" onclick="driveSignIn()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Conectar ao Drive
+    </button>
+    <button id="btnDriveDisconnect" class="sidebar-footer-btn" onclick="driveSignOut()" style="display:none;font-size:11px">
+      Desconectar Drive
+    </button>
+    <hr style="border:none;border-top:1px solid var(--border);margin:4px 0">
     <button class="sidebar-footer-btn json-out" onclick="exportJSON()">
       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Exportar JSON (backup)
+      Exportar JSON local
     </button>
     <button class="sidebar-footer-btn json-in" onclick="openImportModal()">
       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Importar JSON
+      Importar JSON local
     </button>
     <button class="sidebar-footer-btn" onclick="exportCSV()">
       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -331,6 +392,13 @@ tbody tr:hover .row-actions{opacity:1;}
 
 <!-- ══════════ MAIN ══════════ -->
 <main class="main" id="mainContent">
+
+  <!-- ══ DRIVE AUTOLOAD BANNER ══ -->
+  <div id="autoloadBanner" class="autoload-banner hidden">
+    <div class="ab-icon">☁️</div>
+    <div class="ab-text"><strong id="autoloadText">Carregando backup do Google Drive…</strong><br><span id="autoloadSub" style="font-size:11px;color:var(--muted)"></span></div>
+    <div class="ab-spinner" id="autoloadSpinner"></div>
+  </div>
 
   <!-- ══ LAST IMPORT PANEL ══ -->
   <div id="importPanel" class="import-panel hidden">
@@ -450,7 +518,23 @@ tbody tr:hover .row-actions{opacity:1;}
           <li>Ao terminar → <strong style="color:var(--text)">Exportar JSON</strong> → salvar</li>
           <li>Próxima sessão: importe o JSON e continue</li>
         </ol>
-        <div class="highlight-box"><p>💡 Salve os JSONs no Google Drive ou OneDrive para backup automático na nuvem.</p></div>
+        <div class="highlight-box"><p>💡 Com o Google Drive configurado, o backup é automático — sem precisar salvar arquivos manualmente.</p></div>
+      </div>
+      <div class="guide-section">
+        <h3>☁️ Configurar Google Drive (auto-backup)</h3>
+        <p>Para habilitar <strong style="color:#34a853">Salvar no Drive</strong> e carregamento automático ao abrir a página, crie credenciais gratuitas no Google Cloud.</p>
+        <div class="step-row"><span class="step-num">1</span><p>Acesse <code>console.cloud.google.com</code> → Novo projeto (ex: <em>controle-impl</em>) → Criar.</p></div>
+        <div class="step-row"><span class="step-num">2</span><p><code>APIs e Serviços → Biblioteca</code> → pesquise <strong>Google Drive API</strong> → Ativar.</p></div>
+        <div class="step-row"><span class="step-num">3</span><p><code>Credenciais → Criar → ID do cliente OAuth 2.0</code> → tipo: <strong>Aplicativo da Web</strong>.</p></div>
+        <div class="step-row"><span class="step-num">4</span><p>Em <em>Origens JavaScript autorizadas</em> adicione: <code>https://kennedysaster.github.io</code></p></div>
+        <div class="step-row"><span class="step-num">5</span><p>Copie o <strong>Client ID</strong>. Em <code>Credenciais → Criar → Chave de API</code> copie a <strong>API Key</strong>.</p></div>
+        <div class="step-row"><span class="step-num">6</span><p>No arquivo HTML, preencha as duas constantes no topo do script:<br>
+          <code>const DRIVE_CLIENT_ID = 'SEU_CLIENT_ID';</code><br>
+          <code>const DRIVE_API_KEY = 'SUA_API_KEY';</code>
+        </p></div>
+        <div class="step-row"><span class="step-num">7</span><p>Faça o commit no GitHub. Clique em <strong style="color:#fbbc04">Conectar ao Drive</strong> → autorize → pronto!</p></div>
+        <div class="highlight-box"><p>📁 O backup é salvo como <code>controle_implementacoes_backup.json</code> na pasta:<br><code>drive.google.com/drive/folders/1J1OMZtKDK2Zd4HOQLZPDfkMxZdlY9kpP</code></p></div>
+        <div class="ok-box"><p>✅ Após configurar: ao abrir a página o sistema detecta automaticamente o arquivo mais recente no Drive e carrega tudo.</p></div>
       </div>
     </div>
   </div>
@@ -1189,59 +1273,9 @@ function readJSON(file){
   const reader=new FileReader();
   reader.onload=function(e){
     try{
-      const data=JSON.parse(e.target.result);
-
-      if(data.version===2 && Array.isArray(data.modules)){
-        // V2: importação completa — substitui tudo
-        modules = data.modules;
-
-        // garantir que cada módulo tem state para todos os params
-        modules.forEach(m=>{
-          if(!m.state) m.state={};
-          (m.params||[]).forEach(p=>{
-            if(!m.state[p.id]) m.state[p.id]={status:'pending',date:'',validation:'',cause:'',notes:''};
-          });
-        });
-
-      } else if(data.version===1 && data.state){
-        // V1: era só AR040; as chaves do state eram numéricas ("1","2"…)
-        const ar=modules.find(m=>m.id==='mod_ar040');
-        if(ar){
-          Object.keys(data.state).forEach(rawKey=>{
-            const pid = ar.state[rawKey] !== undefined ? rawKey
-                      : ar.state['p'+rawKey] !== undefined ? 'p'+rawKey
-                      : null;
-            if(pid) Object.assign(ar.state[pid], data.state[rawKey]);
-          });
-        }
-        // Para o painel, monta objeto compatível
-        data.modules = modules;
-      } else {
-        throw new Error('Formato não reconhecido');
-      }
-
-      // Fechar modal ANTES de atualizar a view
+      const data = JSON.parse(e.target.result);
       closeImportModal();
-
-      // Reset de estado de navegação
-      activeModuleId = null;
-      currentFilter  = 'all';
-      searchQuery    = '';
-
-      // Atualizar sidebar
-      renderSidebar();
-
-      // Selecionar primeiro módulo (mostra a view corretamente)
-      if(modules.length){
-        selectModule(modules[0].id);
-      } else {
-        document.getElementById('noModuleView').style.display='flex';
-        document.getElementById('moduleView').style.display='none';
-      }
-
-      updateImportPanel(data, file.name);
-      showToast('✅ Importado: '+(data.exportedAt||file.name),'ok');
-
+      applyImportedData(data, file.name);
     } catch(err){
       console.error('Erro importação JSON:', err);
       showToast('Erro ao importar: verifique o arquivo JSON','err');
@@ -1260,12 +1294,344 @@ function showToast(msg,type='ok'){
   setTimeout(()=>t.classList.remove('show'),3000);
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// GOOGLE DRIVE INTEGRATION
+// ══════════════════════════════════════════════════════════════════
+// IMPORTANT: Replace with your own credentials from console.cloud.google.com
+const DRIVE_CLIENT_ID   = ''; // << PREENCHER: seu Client ID OAuth2
+const DRIVE_API_KEY     = ''; // << PREENCHER: sua API Key
+const DRIVE_FOLDER_ID   = '1J1OMZtKDK2Zd4HOQLZPDfkMxZdlY9kpP'; // pasta do link compartilhado
+const DRIVE_FILE_NAME   = 'controle_implementacoes_backup.json';
+const DRIVE_SCOPES      = 'https://www.googleapis.com/auth/drive.file';
+const LS_TOKEN_KEY      = 'drive_access_token';
+const LS_DATA_KEY       = 'controle_impl_local_backup';
+const LS_DRIVE_FILE_KEY = 'drive_file_id';
+
+let driveAccessToken = null;
+let driveFileId      = localStorage.getItem(LS_DRIVE_FILE_KEY) || null;
+let gapiReady        = false;
+let gisReady         = false;
+let tokenClient      = null;
+
+// ── GAPI load ──────────────────────────────────────────────────
+function gapiLoaded(){
+  if(typeof gapi === 'undefined') return;
+  gapi.load('client', async function(){
+    try {
+      await gapi.client.init({
+        apiKey: DRIVE_API_KEY,
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+      });
+      gapiReady = true;
+      checkDriveReady();
+    } catch(e){ console.warn('GAPI init failed:', e); }
+  });
+}
+
+// ── GIS (Google Identity Services) load ───────────────────────
+function gisLoaded(){
+  if(typeof google === 'undefined' || !google.accounts) return;
+  if(!DRIVE_CLIENT_ID){ return; } // no credentials configured
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CLIENT_ID,
+    scope: DRIVE_SCOPES,
+    callback: function(resp){
+      if(resp.error){ setDriveStatus('disconnected', 'Erro de autenticação'); return; }
+      driveAccessToken = resp.access_token;
+      gapi.client.setToken({access_token: driveAccessToken});
+      localStorage.setItem(LS_TOKEN_KEY, driveAccessToken);
+      setDriveConnected(true);
+      // Auto-load after sign in
+      driveLoad();
+    }
+  });
+  gisReady = true;
+  checkDriveReady();
+}
+
+function checkDriveReady(){
+  if(!DRIVE_CLIENT_ID || !DRIVE_API_KEY){
+    // Credentials not set — show setup guide
+    setDriveStatus('disconnected', 'Configure credenciais OAuth2');
+    document.getElementById('btnDriveConnect').title = 'Veja guia na aba "Como publicar"';
+    return;
+  }
+  if(gapiReady && gisReady){
+    // Try restore token from localStorage
+    const saved = localStorage.getItem(LS_TOKEN_KEY);
+    if(saved){
+      driveAccessToken = saved;
+      gapi.client.setToken({access_token: saved});
+      // Validate token with a lightweight API call
+      gapi.client.drive.about.get({fields:'user'}).then(function(r){
+        const user = r.result.user;
+        setDriveConnected(true, user);
+        // Auto-load on page open
+        driveAutoLoad();
+      }).catch(function(){
+        localStorage.removeItem(LS_TOKEN_KEY);
+        setDriveConnected(false);
+      });
+    }
+  }
+}
+
+// ── UI helpers ─────────────────────────────────────────────────
+function setDriveStatus(state, text){
+  const el = document.getElementById('driveStatus');
+  const tx = document.getElementById('driveStatusText');
+  el.className = 'drive-status ' + state;
+  tx.textContent = text;
+}
+function setDriveConnected(connected, user){
+  document.getElementById('btnDriveConnect').style.display    = connected ? 'none' : 'flex';
+  document.getElementById('btnDriveDisconnect').style.display = connected ? 'flex' : 'none';
+  document.getElementById('btnDriveSave').style.display       = connected ? 'flex' : 'none';
+  document.getElementById('btnDriveLoad').style.display       = connected ? 'flex' : 'none';
+  document.getElementById('driveUser').style.display          = (connected && user) ? 'flex' : 'none';
+  if(connected){
+    setDriveStatus('connected', 'Drive conectado');
+    if(user){
+      document.getElementById('driveUserName').textContent = user.displayName || user.emailAddress || '';
+      if(user.photoLink) document.getElementById('driveUserImg').src = user.photoLink;
+    }
+  } else {
+    setDriveStatus('disconnected', 'Google Drive desconectado');
+  }
+}
+
+// ── Sign In / Out ───────────────────────────────────────────────
+function driveSignIn(){
+  if(!DRIVE_CLIENT_ID){
+    showToast('Configure o Client ID OAuth2 primeiro — veja aba "Como publicar"', 'err');
+    return;
+  }
+  if(!tokenClient){ showToast('Google Identity Services não carregado', 'err'); return; }
+  tokenClient.requestAccessToken({prompt: driveAccessToken ? '' : 'consent'});
+}
+function driveSignOut(){
+  if(driveAccessToken) google.accounts.oauth2.revoke(driveAccessToken);
+  driveAccessToken = null;
+  localStorage.removeItem(LS_TOKEN_KEY);
+  setDriveConnected(false);
+  showToast('Desconectado do Drive', 'ok');
+}
+
+// ── SAVE to Drive ───────────────────────────────────────────────
+async function driveSave(){
+  if(!driveAccessToken){ showToast('Conecte ao Drive primeiro', 'err'); return; }
+  setDriveStatus('loading', 'Salvando…');
+  try {
+    const now    = new Date();
+    const payload = JSON.stringify({version:2, exportedAt:now.toLocaleString('pt-BR'), modules}, null, 2);
+    const blob   = new Blob([payload], {type:'application/json'});
+
+    let url, method, fileId = driveFileId;
+
+    if(fileId){
+      // Update existing file
+      url    = 'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media';
+      method = 'PATCH';
+    } else {
+      // Create new file in the specified folder
+      const meta = {name: DRIVE_FILE_NAME, parents: [DRIVE_FOLDER_ID], mimeType:'application/json'};
+      const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method:'POST',
+        headers:{'Authorization':'Bearer '+driveAccessToken,'Content-Type':'application/json'},
+        body: JSON.stringify(meta)
+      });
+      const metaJson = await metaRes.json();
+      if(!metaRes.ok) throw new Error(metaJson.error?.message || 'Erro ao criar arquivo');
+      fileId = metaJson.id;
+      driveFileId = fileId;
+      localStorage.setItem(LS_DRIVE_FILE_KEY, fileId);
+      url    = 'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media';
+      method = 'PATCH';
+    }
+
+    const res = await fetch(url, {
+      method,
+      headers:{'Authorization':'Bearer '+driveAccessToken,'Content-Type':'application/json'},
+      body: payload
+    });
+    if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||'Erro upload'); }
+
+    // Also save timestamp metadata
+    await fetch('https://www.googleapis.com/drive/v3/files/'+fileId, {
+      method:'PATCH',
+      headers:{'Authorization':'Bearer '+driveAccessToken,'Content-Type':'application/json'},
+      body: JSON.stringify({description:'Backup: '+now.toLocaleString('pt-BR')})
+    });
+
+    setDriveStatus('connected', 'Drive conectado');
+    showToast('✅ Salvo no Google Drive!', 'ok');
+    // Also save locally
+    localStorage.setItem(LS_DATA_KEY, payload);
+  } catch(err){
+    console.error('Drive save error:', err);
+    setDriveStatus('connected', 'Erro ao salvar');
+    showToast('Erro ao salvar no Drive: ' + err.message, 'err');
+  }
+}
+
+// ── LOAD from Drive ─────────────────────────────────────────────
+async function driveLoad(){
+  if(!driveAccessToken){ showToast('Conecte ao Drive primeiro', 'err'); return; }
+  setDriveStatus('loading', 'Carregando…');
+  try {
+    let fileId = driveFileId;
+
+    // If no saved fileId, search for the file by name in the folder
+    if(!fileId){
+      const searchUrl = "https://www.googleapis.com/drive/v3/files?q=name%3D'" +
+        encodeURIComponent(DRIVE_FILE_NAME) +
+        "'%20and%20'" + DRIVE_FOLDER_ID + "'%20in%20parents%20and%20trashed%3Dfalse" +
+        "&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)";
+      const searchRes = await fetch(searchUrl, {
+        headers:{'Authorization':'Bearer '+driveAccessToken}
+      });
+      const searchJson = await searchRes.json();
+      if(searchJson.files && searchJson.files.length > 0){
+        fileId = searchJson.files[0].id;
+        driveFileId = fileId;
+        localStorage.setItem(LS_DRIVE_FILE_KEY, fileId);
+      }
+    }
+
+    if(!fileId){
+      setDriveStatus('connected', 'Nenhum backup no Drive');
+      showToast('Nenhum backup encontrado no Drive. Faça o primeiro salvamento.', 'err');
+      return;
+    }
+
+    const res = await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media', {
+      headers:{'Authorization':'Bearer '+driveAccessToken}
+    });
+    if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||'Erro ao baixar'); }
+
+    const text = await res.text();
+    const data = JSON.parse(text);
+
+    applyImportedData(data, 'Google Drive');
+    setDriveStatus('connected', 'Drive conectado');
+    localStorage.setItem(LS_DATA_KEY, text);
+  } catch(err){
+    console.error('Drive load error:', err);
+    setDriveStatus('connected', 'Erro ao carregar');
+    showToast('Erro ao carregar do Drive: ' + err.message, 'err');
+  }
+}
+
+// ── AUTO-LOAD on page open ──────────────────────────────────────
+function driveAutoLoad(){
+  const banner = document.getElementById('autoloadBanner');
+  const text   = document.getElementById('autoloadText');
+  const sub    = document.getElementById('autoloadSub');
+  const spinner= document.getElementById('autoloadSpinner');
+  banner.classList.remove('hidden');
+  text.textContent   = 'Carregando backup do Google Drive…';
+  sub.textContent    = 'Buscando arquivo mais recente na sua pasta';
+  spinner.style.display = 'block';
+
+  driveLoad().then(function(){
+    setTimeout(function(){
+      spinner.style.display = 'none';
+      text.textContent = '✅ Backup do Drive carregado automaticamente';
+      sub.textContent  = 'Dados sincronizados com sua pasta do Google Drive';
+      setTimeout(function(){ banner.classList.add('hidden'); }, 4000);
+    }, 500);
+  }).catch(function(){
+    banner.classList.add('hidden');
+  });
+}
+
+// ── APPLY imported data (shared by file and Drive imports) ──────
+function applyImportedData(data, source){
+  if(data.version === 2 && Array.isArray(data.modules)){
+    modules = data.modules;
+    modules.forEach(function(m){
+      if(!m.state) m.state = {};
+      (m.params||[]).forEach(function(p){
+        if(!m.state[p.id]) m.state[p.id] = {status:'pending',date:'',validation:'',cause:'',notes:''};
+      });
+    });
+  } else if(data.version === 1 && data.state){
+    const ar = modules.find(function(m){ return m.id === 'mod_ar040'; });
+    if(ar){
+      Object.keys(data.state).forEach(function(rawKey){
+        const pid = ar.state[rawKey] !== undefined ? rawKey
+                  : ar.state['p'+rawKey] !== undefined ? 'p'+rawKey : null;
+        if(pid) Object.assign(ar.state[pid], data.state[rawKey]);
+      });
+    }
+    data.modules = modules;
+  } else {
+    throw new Error('Formato não reconhecido');
+  }
+
+  activeModuleId = null;
+  currentFilter  = 'all';
+  searchQuery    = '';
+  renderSidebar();
+  if(modules.length) selectModule(modules[0].id);
+
+  updateImportPanel(data, source);
+  showToast('✅ Carregado de: ' + source, 'ok');
+}
+
+// ── LOCAL STORAGE auto-save ─────────────────────────────────────
+function localBackup(){
+  try {
+    const payload = JSON.stringify({version:2, exportedAt:new Date().toLocaleString('pt-BR'), modules});
+    localStorage.setItem(LS_DATA_KEY, payload);
+  } catch(e){ /* ignore */ }
+}
+function localRestore(){
+  try {
+    const saved = localStorage.getItem(LS_DATA_KEY);
+    if(!saved) return false;
+    const data = JSON.parse(saved);
+    if(data.version === 2 && Array.isArray(data.modules)){
+      modules = data.modules;
+      modules.forEach(function(m){
+        if(!m.state) m.state = {};
+        (m.params||[]).forEach(function(p){
+          if(!m.state[p.id]) m.state[p.id]={status:'pending',date:'',validation:'',cause:'',notes:''};
+        });
+      });
+      return true;
+    }
+  } catch(e){ /* ignore */ }
+  return false;
+}
+
+// Poll to save locally every 30s when there are changes
+let _lastLocalHash = '';
+setInterval(function(){
+  const h = JSON.stringify(modules).length + '';
+  if(h !== _lastLocalHash){ _lastLocalHash = h; localBackup(); }
+}, 30000);
+
+// ── Init Drive when APIs ready ──────────────────────────────────
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    if(typeof gapi !== 'undefined') gapiLoaded();
+    if(typeof google !== 'undefined' && google.accounts) gisLoaded();
+  }, 1500);
+});
+
 // ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
+// Try to restore from localStorage first (keeps data between sessions)
+const _restored = localRestore();
 renderSidebar();
-// auto-select AR040
-selectModule('mod_ar040');
+if(_restored && modules.length){
+  selectModule(modules[0].id);
+} else {
+  selectModule('mod_ar040');
+}
 </script>
 </body>
 </html>
